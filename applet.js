@@ -190,20 +190,22 @@ ClearRecentMenuItem.prototype = {
 }
 
 
-function MyApplet(orientation, panel_height, instanceId) {
-    this._init(orientation, panel_height, instanceId);
+function MyApplet(metadata, orientation, panel_height, instanceId) {
+    this._init(metadata, orientation, panel_height, instanceId);
 }
 
 MyApplet.prototype = {
     __proto__: Applet.TextIconApplet.prototype,
     
-    _init: function(orientation, panel_height, instanceId) {
+    _init: function(metadata, orientation, panel_height, instanceId) {
         try {
             
+            this.metadata = metadata;
+            this.instanceId = instanceId;
             this.orientation = orientation;
             Applet.TextIconApplet.prototype._init.call(this, this.orientation, panel_height);
             
-            this._bind_settings(instanceId);
+            this._bindSettings(instanceId);
             
             //set up panel
             this._set_panel_icon();
@@ -221,7 +223,7 @@ MyApplet.prototype = {
             dirMonitor.connect("changed", Lang.bind(this, this._build_pictures_section));
             this.recentManager.connect("changed", Lang.bind(this, this._build_recent_documents_section));
             
-            this.build_menu();
+            this.buildMenu();
             
         } catch (e) {
             global.logError(e);
@@ -232,21 +234,36 @@ MyApplet.prototype = {
         this.menu.toggle();
     },
     
-    _bind_settings: function(instanceId) {
-        
-        this.settings = new Settings.AppletSettings(this, UUID, instanceId);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "panelIcon", "panelIcon", this._set_panel_icon);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "panelText", "panelText", this._set_panel_text);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "iconSize", "iconSize", this.build_menu);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "showPictures", "showPictures", this.build_menu);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "altDir", "altDir", this._build_pictures_section);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "recursePictures", "recursePictures", this._build_pictures_section);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "showRecentDocuments", "showRecentDocuments", this.build_menu);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "recentSizeLimit", "recentSizeLimit", this._build_recent_documents_section);
-        
+    on_applet_removed_from_panel: function() {
+        if ( this.keyId ) Main.keybindingManager.removeHotKey(this.keyId);
     },
     
-    build_menu: function() {
+    openMenu: function(){
+        this.menu.open();
+    },
+    
+    _bindSettings: function(instanceId) {
+        this.settings = new Settings.AppletSettings(this, this.metadata["uuid"], this.instanceId);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "panelIcon", "panelIcon", this._set_panel_icon);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "panelText", "panelText", this._set_panel_text);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "iconSize", "iconSize", this.buildMenu);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "showPictures", "showPictures", this.buildMenu);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "altDir", "altDir", this._build_pictures_section);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "recursePictures", "recursePictures", this._build_pictures_section);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "showRecentDocuments", "showRecentDocuments", this.buildMenu);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "recentSizeLimit", "recentSizeLimit", this._build_recent_documents_section);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "keyOpen", "keyOpen", this._setKeybinding);
+        this._setKeybinding();
+    },
+    
+    _setKeybinding: function() {
+        if ( this.keyId ) Main.keybindingManager.removeHotKey(this.keyId);
+        if ( this.keyOpen == "" ) return;
+        this.keyId = "graphicsCenter-open";
+        Main.keybindingManager.addHotKey(this.keyId, this.keyOpen, Lang.bind(this, this.openMenu));
+    },
+    
+    buildMenu: function() {
         try {
             
             if ( this.menu ) this.menu.destroy();
@@ -418,6 +435,6 @@ MyApplet.prototype = {
 
 
 function main(metadata, orientation, panel_height, instanceId) {
-    let myApplet = new MyApplet(orientation, panel_height, instanceId);
+    let myApplet = new MyApplet(metadata, orientation, panel_height, instanceId);
     return myApplet;
 }
