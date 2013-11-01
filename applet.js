@@ -84,14 +84,14 @@ LauncherMenuItem.prototype = {
 }
 
 
-function PictureMenuItem(menu, file) {
-    this._init(menu, file);
+function PictureMenuItem(menu, file, pictureSize) {
+    this._init(menu, file, pictureSize);
 }
 
 PictureMenuItem.prototype = {
     __proto__: PopupMenu.PopupBaseMenuItem.prototype,
     
-    _init: function(menu, file, params) {
+    _init: function(menu, file, pictureSize, params) {
         try {
             
             PopupMenu.PopupBaseMenuItem.prototype._init.call(this, params);
@@ -99,7 +99,7 @@ PictureMenuItem.prototype = {
             let fileInfo = file.query_info("*", Gio.FileQueryInfoFlags.NONE, null);
             this.uri = file.get_uri();
             
-            let image = St.TextureCache.get_default().load_uri_async(this.uri, 120, 100);
+            let image = St.TextureCache.get_default().load_uri_async(this.uri, pictureSize, pictureSize);
             this.addActor(image);
             
             let tooltip = new Tooltips.Tooltip(this.actor, fileInfo.get_name());
@@ -250,6 +250,7 @@ MyApplet.prototype = {
         this.settings.bindProperty(Settings.BindingDirection.IN, "showPictures", "showPictures", this.buildMenu);
         this.settings.bindProperty(Settings.BindingDirection.IN, "altDir", "altDir", this._build_pictures_section);
         this.settings.bindProperty(Settings.BindingDirection.IN, "recursePictures", "recursePictures", this._build_pictures_section);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "pictureSize", "pictureSize", this._build_pictures_section);
         this.settings.bindProperty(Settings.BindingDirection.IN, "showRecentDocuments", "showRecentDocuments", this.buildMenu);
         this.settings.bindProperty(Settings.BindingDirection.IN, "recentSizeLimit", "recentSizeLimit", this._build_recent_documents_section);
         this.settings.bindProperty(Settings.BindingDirection.IN, "keyOpen", "keyOpen", this._setKeybinding);
@@ -379,7 +380,7 @@ MyApplet.prototype = {
         let pictures = this._get_pictures(dir);
         for ( let i = 0; i < pictures.length; i++ ) {
             let picture = pictures[i];
-            let pictureItem = new PictureMenuItem(this.menu, picture);
+            let pictureItem = new PictureMenuItem(this.menu, picture, this.pictureSize);
             this.pictureSection.addMenuItem(pictureItem);
         }
         
