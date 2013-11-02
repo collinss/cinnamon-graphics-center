@@ -297,15 +297,20 @@ MyApplet.prototype = {
             if ( this.showPictures ) {
                 
                 let picturesPane = new PopupMenu.PopupMenuSection();
+                mainBox.add_actor(picturesPane.actor, { span: 1 });
                 let title = new PopupMenu.PopupMenuItem(_("PICTURES") , { reactive: false });
                 picturesPane.addMenuItem(title);
                 
                 let pictureScrollBox = new St.ScrollView({ x_fill: true, y_fill: false, y_align: St.Align.START });
+                picturesPane.actor.add_actor(pictureScrollBox);
+                pictureScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+                let vscroll = pictureScrollBox.get_vscroll_bar();
+                vscroll.connect('scroll-start', Lang.bind(this, function() { this.menu.passEvents = true; }));
+                vscroll.connect('scroll-stop', Lang.bind(this, function() { this.menu.passEvents = false; }));
+                
                 this.pictureSection = new PopupMenu.PopupMenuSection();
                 pictureScrollBox.add_actor(this.pictureSection.actor);
-                picturesPane.actor.add_actor(pictureScrollBox);
                 
-                mainBox.add_actor(picturesPane.actor, { span: 1 });
                 this._build_pictures_section();
                 
                 let paddingBox = new St.BoxLayout();
@@ -324,9 +329,14 @@ MyApplet.prototype = {
                 recentPane.addMenuItem(title);
                 
                 let recentScrollBox = new St.ScrollView({ x_fill: true, y_fill: false, y_align: St.Align.START });
+                recentPane.actor.add_actor(recentScrollBox);
+                recentScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+                let vscroll = recentScrollBox.get_vscroll_bar();
+                vscroll.connect('scroll-start', Lang.bind(this, function() { this.menu.passEvents = true; }));
+                vscroll.connect('scroll-stop', Lang.bind(this, function() { this.menu.passEvents = false; }));
+                
                 this.recentSection = new PopupMenu.PopupMenuSection();
                 recentScrollBox.add_actor(this.recentSection.actor);
-                recentPane.actor.add_actor(recentScrollBox);
                 
                 let clearRecent = new ClearRecentMenuItem(this.menu, this.recentManager);
                 recentPane.addMenuItem(clearRecent);
