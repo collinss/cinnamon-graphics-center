@@ -298,8 +298,19 @@ MyApplet.prototype = {
                 
                 let picturesPane = new PopupMenu.PopupMenuSection();
                 mainBox.add_actor(picturesPane.actor, { span: 1 });
-                let title = new PopupMenu.PopupMenuItem(_("PICTURES") , { reactive: false });
+                let title = new PopupMenu.PopupBaseMenuItem({ reactive: false });
+                title.addActor(new St.Label({ text: _("PICTURES") }));
                 picturesPane.addMenuItem(title);
+                
+                //add link to documents folder
+                let linkButton = new St.Button();
+                title.addActor(linkButton);
+                let file = Gio.file_new_for_path(this.metadata.path + "/link-symbolic.svg");
+                let gicon = new Gio.FileIcon({ file: file });
+                let image = new St.Icon({ gicon: gicon, icon_size: 16, icon_type: St.IconType.SYMBOLIC });
+                linkButton.add_actor(image);
+                linkButton.connect("clicked", Lang.bind(this, this.openPicturesFolder));
+                new Tooltips.Tooltip(linkButton, _("Open folder"));
                 
                 let pictureScrollBox = new St.ScrollView({ x_fill: true, y_fill: false, y_align: St.Align.START });
                 picturesPane.actor.add_actor(pictureScrollBox);
@@ -384,9 +395,9 @@ MyApplet.prototype = {
         
         this.pictureSection.removeAll();
         
-        if ( this.altDir == "" ) path = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES);
-        else path = this.altDir;
-        let dir = Gio.file_new_for_path(path);
+        if ( this.altDir == "" ) this.picturesPath = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES);
+        else this.picturesPath = this.altDir;
+        let dir = Gio.file_new_for_path(this.picturesPath);
         let pictures = this._get_pictures(dir);
         for ( let i = 0; i < pictures.length; i++ ) {
             let picture = pictures[i];
@@ -431,6 +442,11 @@ MyApplet.prototype = {
             this.recentSection.addMenuItem(recentItem);
         }
         
+    },
+    
+    openPicturesFolder: function() {
+        this.menu.close();
+        Gio.app_info_launch_default_for_uri("file://" + this.picturesPath, global.create_app_launch_context());
     },
     
     _set_panel_icon: function() {
