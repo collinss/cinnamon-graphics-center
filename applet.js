@@ -208,8 +208,8 @@ MyApplet.prototype = {
             this._bindSettings(instanceId);
             
             //set up panel
-            this._set_panel_icon();
-            this._set_panel_text();
+            this.setPanelIcon();
+            this.setPanelText();
             this.set_applet_tooltip(_("Office"));
             
             this.menuManager = new PopupMenu.PopupMenuManager(this);
@@ -244,8 +244,9 @@ MyApplet.prototype = {
     
     _bindSettings: function(instanceId) {
         this.settings = new Settings.AppletSettings(this, this.metadata["uuid"], this.instanceId);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "panelIcon", "panelIcon", this._set_panel_icon);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "panelText", "panelText", this._set_panel_text);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "panelIcon", "panelIcon", this.setPanelIcon);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "symbolicPanelIcon", "symbolicPanelIcon", this.setPanelIcon);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "panelText", "panelText", this.setPanelText);
         this.settings.bindProperty(Settings.BindingDirection.IN, "iconSize", "iconSize", this.buildMenu);
         this.settings.bindProperty(Settings.BindingDirection.IN, "showPictures", "showPictures", this.buildMenu);
         this.settings.bindProperty(Settings.BindingDirection.IN, "altDir", "altDir", this._build_pictures_section);
@@ -452,14 +453,39 @@ MyApplet.prototype = {
         Gio.app_info_launch_default_for_uri("file://" + this.picturesPath, global.create_app_launch_context());
     },
     
-    _set_panel_icon: function() {
-        if ( this.panelIcon.split("/").length > 1 ) this.set_applet_icon_path(this.panelIcon);
-        else this.set_applet_icon_name(this.panelIcon);
+    setPanelIcon: function() {
+        if ( this.panelIcon.split("/").length > 1 ) {
+            if ( this.symbolicPanelIcon && this.panelIcon.search("-symbolic.svg") > 0 ) this.set_applet_icon_symbolic_path(this.panelIcon);
+            else this.set_applet_icon_path(this.panelIcon);
+        }
+        else {
+            if ( this.symbolicPanelIcon ) this.set_applet_icon_symbolic_name(this.panelIcon);
+            else this.set_applet_icon_name(this.panelIcon);
+        }
     },
     
-    _set_panel_text: function() {
+    setPanelText: function() {
         if ( this.panelText ) this.set_applet_label(this.panelText);
         else this.set_applet_label("");
+    },
+    
+    set_applet_icon_symbolic_path: function(icon_path) {
+        if (this._applet_icon_box.child) this._applet_icon_box.child.destroy();
+        
+        if (icon_path){
+            let file = Gio.file_new_for_path(icon_path);
+            let gicon = new Gio.FileIcon({ file: file });
+            if (this._scaleMode) {
+                let height = (this._panelHeight / DEFAULT_PANEL_HEIGHT) * PANEL_SYMBOLIC_ICON_DEFAULT_HEIGHT;
+                this._applet_icon = new St.Icon({gicon: gicon, icon_size: height,
+                                                icon_type: St.IconType.SYMBOLIC, reactive: true, track_hover: true, style_class: 'applet-icon' });
+            } else {
+                this._applet_icon = new St.Icon({gicon: gicon, icon_size: 22, icon_type: St.IconType.FULLCOLOR, reactive: true, track_hover: true, style_class: 'applet-icon' });
+            }
+            this._applet_icon_box.child = this._applet_icon;
+        }
+        this.__icon_type = -1;
+        this.__icon_name = icon_path;
     }
 };
 
