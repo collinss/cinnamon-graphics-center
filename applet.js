@@ -17,7 +17,6 @@ const Util = imports.misc.util;
 const Lang = imports.lang;
 
 const MENU_ITEM_TEXT_LENGTH = 25;
-const MENU_PADDING_WIDTH = 25;
 
 let menu_item_icon_size;
 
@@ -344,9 +343,9 @@ MyApplet.prototype = {
             this.recentManager = new Gtk.RecentManager();
             
             //listen for changes
-            this.appSys.connect("installed-changed", Lang.bind(this, this._build_launchers_section));
-            dirMonitor.connect("changed", Lang.bind(this, this._build_pictures_section));
-            this.recentManager.connect("changed", Lang.bind(this, this._build_recent_documents_section));
+            this.appSys.connect("installed-changed", Lang.bind(this, this.buildLaunchersSection));
+            dirMonitor.connect("changed", Lang.bind(this, this.buildPicturesSection));
+            this.recentManager.connect("changed", Lang.bind(this, this.buildRecentDocumentsSection));
             
             this.buildMenu();
             
@@ -377,11 +376,11 @@ MyApplet.prototype = {
         this.settings.bindProperty(Settings.BindingDirection.IN, "panelText", "panelText", this.setPanelText);
         this.settings.bindProperty(Settings.BindingDirection.IN, "iconSize", "iconSize", this.buildMenu);
         this.settings.bindProperty(Settings.BindingDirection.IN, "showPictures", "showPictures", this.buildMenu);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "altDir", "altDir", this._build_pictures_section);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "recursePictures", "recursePictures", this._build_pictures_section);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "pictureSize", "pictureSize", this._build_pictures_section);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "altDir", "altDir", this.buildPicturesSection);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "recursePictures", "recursePictures", this.buildPicturesSection);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "pictureSize", "pictureSize", this.buildPicturesSection);
         this.settings.bindProperty(Settings.BindingDirection.IN, "showRecentDocuments", "showRecentDocuments", this.buildMenu);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "recentSizeLimit", "recentSizeLimit", this._build_recent_documents_section);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "recentSizeLimit", "recentSizeLimit", this.buildRecentDocumentsSection);
         this.settings.bindProperty(Settings.BindingDirection.IN, "keyOpen", "keyOpen", this._setKeybinding);
         this._setKeybinding();
     },
@@ -404,36 +403,36 @@ MyApplet.prototype = {
             this.menuManager.addMenu(this.menu);
             let section = new PopupMenu.PopupMenuSection();
             this.menu.addMenuItem(section);
-            let mainBox = new St.BoxLayout({ style_class: 'menu-applications-box', vertical: false });
+            let mainBox = new St.BoxLayout({ style_class: "xCenter-mainBox", vertical: false });
             section.actor.add_actor(mainBox);
             
             //launchers section
+            let launchersPaneBox = new St.BoxLayout({ style_class: "xCenter-pane" });
+            mainBox.add_actor(launchersPaneBox);
             let launchersPane = new PopupMenu.PopupMenuSection();
-            let title = new PopupMenu.PopupMenuItem(_("LAUNCHERS") , { reactive: false });
-            launchersPane.addMenuItem(title);
+            launchersPaneBox.add_actor(launchersPane.actor);
             
+            let launchersTitle = new PopupMenu.PopupMenuItem(_("LAUNCHERS") , { style_class: "xCenter-title", reactive: false });
+            launchersPane.addMenuItem(launchersTitle);
             this.launchersSection = new PopupMenu.PopupMenuSection();
             launchersPane.addMenuItem(this.launchersSection);
             
-            mainBox.add_actor(launchersPane.actor, { span: 1 });
-            this._build_launchers_section();
-            
-            let paddingBox = new St.BoxLayout();
-            paddingBox.set_width(MENU_PADDING_WIDTH);
-            mainBox.add_actor(paddingBox);
+            this.buildLaunchersSection();
             
             //pictures section
             if ( this.showPictures ) {
-                
+                let picturesPaneBox = new St.BoxLayout({ style_class: "xCenter-pane" });
+                mainBox.add_actor(picturesPaneBox);
                 let picturesPane = new PopupMenu.PopupMenuSection();
-                mainBox.add_actor(picturesPane.actor, { span: 1 });
-                let title = new PopupMenu.PopupBaseMenuItem({ reactive: false });
-                title.addActor(new St.Label({ text: _("PICTURES") }));
-                picturesPane.addMenuItem(title);
+                picturesPaneBox.add_actor(picturesPane.actor);
+                
+                let picturesTitle = new PopupMenu.PopupBaseMenuItem({ style_class: "xCenter-title", reactive: false });
+                picturesTitle.addActor(new St.Label({ text: _("PICTURES") }));
+                picturesPane.addMenuItem(picturesTitle);
                 
                 //add link to documents folder
                 let linkButton = new St.Button();
-                title.addActor(linkButton);
+                picturesTitle.addActor(linkButton);
                 let file = Gio.file_new_for_path(this.metadata.path + "/link-symbolic.svg");
                 let gicon = new Gio.FileIcon({ file: file });
                 let image = new St.Icon({ gicon: gicon, icon_size: 10, icon_type: St.IconType.SYMBOLIC });
@@ -441,39 +440,35 @@ MyApplet.prototype = {
                 linkButton.connect("clicked", Lang.bind(this, this.openPicturesFolder));
                 new Tooltips.Tooltip(linkButton, _("Open folder"));
                 
-                let pictureScrollBox = new St.ScrollView({ x_fill: true, y_fill: false, y_align: St.Align.START });
+                let pictureScrollBox = new St.ScrollView({ style_class: "xCenter-scrollBox", x_fill: true, y_fill: false, y_align: St.Align.START });
                 picturesPane.actor.add_actor(pictureScrollBox);
                 pictureScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
                 let vscroll = pictureScrollBox.get_vscroll_bar();
-                vscroll.connect('scroll-start', Lang.bind(this, function() { this.menu.passEvents = true; }));
-                vscroll.connect('scroll-stop', Lang.bind(this, function() { this.menu.passEvents = false; }));
+                vscroll.connect("scroll-start", Lang.bind(this, function() { this.menu.passEvents = true; }));
+                vscroll.connect("scroll-stop", Lang.bind(this, function() { this.menu.passEvents = false; }));
                 
                 this.pictureSection = new PopupMenu.PopupMenuSection();
                 pictureScrollBox.add_actor(this.pictureSection.actor);
                 
-                this._build_pictures_section();
-                
-                let paddingBox = new St.BoxLayout();
-                paddingBox.set_width(MENU_PADDING_WIDTH);
-                mainBox.add_actor(paddingBox);
-                
+                this.buildPicturesSection();
             }
             
             //recent documents section
             if ( this.showRecentDocuments ) {
-                
+                let recentPaneBox = new St.BoxLayout({ style_class: "xCenter-pane" });
+                mainBox.add_actor(recentPaneBox);
                 let recentPane = new PopupMenu.PopupMenuSection();
-                mainBox.add_actor(recentPane.actor, { span: 1 });
+                recentPaneBox.add_actor(recentPane.actor);
                 
-                let title = new PopupMenu.PopupMenuItem(_("RECENT DOCUMENTS"), { reactive: false });
-                recentPane.addMenuItem(title);
+                let recentTitle = new PopupMenu.PopupMenuItem(_("RECENT DOCUMENTS"), { style_class: "xCenter-title", reactive: false });
+                recentPane.addMenuItem(recentTitle);
                 
-                let recentScrollBox = new St.ScrollView({ x_fill: true, y_fill: false, y_align: St.Align.START });
+                let recentScrollBox = new St.ScrollView({ style_class: "xCenter-scrollBox", x_fill: true, y_fill: false, y_align: St.Align.START });
                 recentPane.actor.add_actor(recentScrollBox);
                 recentScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
                 let vscroll = recentScrollBox.get_vscroll_bar();
-                vscroll.connect('scroll-start', Lang.bind(this, function() { this.menu.passEvents = true; }));
-                vscroll.connect('scroll-stop', Lang.bind(this, function() { this.menu.passEvents = false; }));
+                vscroll.connect("scroll-start", Lang.bind(this, function() { this.menu.passEvents = true; }));
+                vscroll.connect("scroll-stop", Lang.bind(this, function() { this.menu.passEvents = false; }));
                 
                 this.recentSection = new PopupMenu.PopupMenuSection();
                 recentScrollBox.add_actor(this.recentSection.actor);
@@ -481,8 +476,7 @@ MyApplet.prototype = {
                 let clearRecent = new ClearRecentMenuItem(this.menu, this.recentManager);
                 recentPane.addMenuItem(clearRecent);
                 
-                this._build_recent_documents_section();
-                
+                this.buildRecentDocumentsSection();
             }
             
         } catch(e) {
@@ -490,7 +484,7 @@ MyApplet.prototype = {
         }
     },
     
-    _build_launchers_section: function() {
+    buildLaunchersSection: function() {
         
         this.launchersSection.removeAll();
         
@@ -520,14 +514,14 @@ MyApplet.prototype = {
         
     },
     
-    _build_pictures_section: function() {
+    buildPicturesSection: function() {
         
         this.pictureSection.removeAll();
         
         if ( this.altDir == "" ) this.picturesPath = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES);
         else this.picturesPath = this.altDir;
         let dir = Gio.file_new_for_path(this.picturesPath);
-        let pictures = this._get_pictures(dir);
+        let pictures = this.getPictures(dir);
         for ( let i = 0; i < pictures.length; i++ ) {
             let picture = pictures[i];
             let pictureItem = new PictureMenuItem(this.menu, picture, this.pictureSize);
@@ -536,7 +530,7 @@ MyApplet.prototype = {
         
     },
     
-    _get_pictures: function(dir) {
+    getPictures: function(dir) {
         
         let pictures = [];
         let gEnum = dir.enumerate_children("*", Gio.FileQueryInfoFlags.NONE, null);
@@ -546,7 +540,7 @@ MyApplet.prototype = {
             if ( info.get_is_hidden() ) continue;
             if ( info.get_file_type() == Gio.FileType.DIRECTORY && this.recursePictures ) {
                 let childDir = dir.get_child(info.get_name());
-                pictures = pictures.concat(this._get_pictures(childDir));
+                pictures = pictures.concat(this.getPictures(childDir));
             }
             else {
                 if ( info.get_content_type().search("image") == -1 ) continue;
@@ -557,7 +551,7 @@ MyApplet.prototype = {
         
     },
     
-    _build_recent_documents_section: function() {
+    buildRecentDocumentsSection: function() {
         
         if ( !this.showRecentDocuments ) return;
         this.recentSection.removeAll();
@@ -609,9 +603,9 @@ MyApplet.prototype = {
             if (this._scaleMode) {
                 let height = (this._panelHeight / DEFAULT_PANEL_HEIGHT) * PANEL_SYMBOLIC_ICON_DEFAULT_HEIGHT;
                 this._applet_icon = new St.Icon({gicon: gicon, icon_size: height,
-                                                icon_type: St.IconType.SYMBOLIC, reactive: true, track_hover: true, style_class: 'applet-icon' });
+                                                icon_type: St.IconType.SYMBOLIC, reactive: true, track_hover: true, style_class: "applet-icon" });
             } else {
-                this._applet_icon = new St.Icon({gicon: gicon, icon_size: 22, icon_type: St.IconType.FULLCOLOR, reactive: true, track_hover: true, style_class: 'applet-icon' });
+                this._applet_icon = new St.Icon({gicon: gicon, icon_size: 22, icon_type: St.IconType.FULLCOLOR, reactive: true, track_hover: true, style_class: "applet-icon" });
             }
             this._applet_icon_box.child = this._applet_icon;
         }
