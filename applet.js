@@ -165,6 +165,8 @@ MenuItem.prototype = {
             
             let tooltip = new Tooltips.Tooltip(this.actor, title);
             
+            this.connect("activate", Lang.bind(this, this.launch));
+            
         } catch (e) {
             global.logError(e);
         }
@@ -172,17 +174,16 @@ MenuItem.prototype = {
 }
 
 
-function LauncherMenuItem(menu, app) {
-    this._init(menu, app);
+function LauncherMenuItem(app) {
+    this._init(app);
 }
 
 LauncherMenuItem.prototype = {
     __proto__: MenuItem.prototype,
     
-    _init: function(menu, app) {
+    _init: function(app) {
         try {
             
-            this.menu = menu;
             this.app = app;
             
             let title = app.get_name();
@@ -194,10 +195,9 @@ LauncherMenuItem.prototype = {
         }
     },
     
-    activate: function() {
+    launch: function() {
         try {
             
-            this.menu.close();
             this.app.open_new_window(-1);
             
         } catch(e) {
@@ -207,18 +207,17 @@ LauncherMenuItem.prototype = {
 }
 
 
-function PictureMenuItem(menu, file, pictureSize) {
-    this._init(menu, file, pictureSize);
+function PictureMenuItem(file, pictureSize) {
+    this._init(file, pictureSize);
 }
 
 PictureMenuItem.prototype = {
     __proto__: PopupMenu.PopupBaseMenuItem.prototype,
     
-    _init: function(menu, file, pictureSize, params) {
+    _init: function(file, pictureSize, params) {
         try {
             
             PopupMenu.PopupBaseMenuItem.prototype._init.call(this, params);
-            this.menu = menu;
             let fileInfo = file.query_info("*", Gio.FileQueryInfoFlags.NONE, null);
             this.uri = file.get_uri();
             
@@ -227,15 +226,16 @@ PictureMenuItem.prototype = {
             
             let tooltip = new Tooltips.Tooltip(this.actor, fileInfo.get_name());
             
+            this.connect("activate", Lang.bind(this, this.launch));
+            
         } catch(e) {
             global.logError(e);
         }
     },
     
-    activate: function(event) {
+    launch: function(event) {
         try {
             
-            this.menu.close();
             Gio.app_info_launch_default_for_uri(this.uri, global.create_app_launch_context());
             
         } catch(e) {
@@ -245,17 +245,16 @@ PictureMenuItem.prototype = {
 }
 
 
-function RecentMenuItem(menu, title, iName, file) {
-    this._init(menu, title, iName, file);
+function RecentMenuItem(title, iName, file) {
+    this._init(title, iName, file);
 }
 
 RecentMenuItem.prototype = {
     __proto__: MenuItem.prototype,
     
-    _init: function(menu, title, iName, file) {
+    _init: function(title, iName, file) {
         try {
             
-            this.menu = menu;
             this.file = file;
             
             let icon = new St.Icon({icon_name: iName, icon_size: menu_item_icon_size, icon_type: St.IconType.FULLCOLOR});
@@ -266,10 +265,9 @@ RecentMenuItem.prototype = {
         }
     },
     
-    activate: function(event) {
+    launch: function(event) {
         try {
             
-            this.menu.close();
             Gio.app_info_launch_default_for_uri(this.file, global.create_app_launch_context());
             
         } catch(e) {
@@ -279,17 +277,16 @@ RecentMenuItem.prototype = {
 }
 
 
-function ClearRecentMenuItem(menu, recentManager) {
-    this._init(menu, recentManager);
+function ClearRecentMenuItem(recentManager) {
+    this._init(recentManager);
 }
 
 ClearRecentMenuItem.prototype = {
     __proto__: MenuItem.prototype,
     
-    _init: function(menu, recentManager) {
+    _init: function(recentManager) {
         try {
             
-            this.menu = menu;
             this.recentManager = recentManager;
             
             let icon = new St.Icon({icon_name: "edit-clear", icon_size: menu_item_icon_size, icon_type: St.IconType.FULLCOLOR});
@@ -300,10 +297,9 @@ ClearRecentMenuItem.prototype = {
         }
     },
     
-    activate: function(event) {
+    launch: function(event) {
         try {
             
-            this.menu.close();
             this.recentManager.purge_items();
             
         } catch(e) {
@@ -411,6 +407,7 @@ MyApplet.prototype = {
             mainBox.add_actor(launchersPaneBox);
             let launchersPane = new PopupMenu.PopupMenuSection();
             launchersPaneBox.add_actor(launchersPane.actor);
+            this.menu._connectSubMenuSignals(launchersPane, launchersPane);
             
             let launchersTitle = new PopupMenu.PopupMenuItem(_("LAUNCHERS") , { style_class: "xCenter-title", reactive: false });
             launchersPane.addMenuItem(launchersTitle);
@@ -434,6 +431,7 @@ MyApplet.prototype = {
                     mainBox.add_actor(picturesPaneBox);
                     let picturesPane = new PopupMenu.PopupMenuSection();
                     picturesPaneBox.add_actor(picturesPane.actor);
+                    this.menu._connectSubMenuSignals(picturesPane, picturesPane);
                     
                     let picturesTitle = new PopupMenu.PopupBaseMenuItem({ style_class: "xCenter-title", reactive: false });
                     picturesTitle.addActor(new St.Label({ text: _("PICTURES") }));
@@ -458,6 +456,7 @@ MyApplet.prototype = {
                     
                     this.pictureSection = new PopupMenu.PopupMenuSection();
                     pictureScrollBox.add_actor(this.pictureSection.actor);
+                    picturesPane._connectSubMenuSignals(this.pictureSection, this.pictureSection);
                     
                     this.updatePicturesSection();
                 }
@@ -471,6 +470,7 @@ MyApplet.prototype = {
                 mainBox.add_actor(recentPaneBox);
                 let recentPane = new PopupMenu.PopupMenuSection();
                 recentPaneBox.add_actor(recentPane.actor);
+                this.menu._connectSubMenuSignals(recentPane, recentPane);
                 
                 let recentTitle = new PopupMenu.PopupMenuItem(_("RECENT DOCUMENTS"), { style_class: "xCenter-title", reactive: false });
                 recentPane.addMenuItem(recentTitle);
@@ -484,8 +484,9 @@ MyApplet.prototype = {
                 
                 this.recentSection = new PopupMenu.PopupMenuSection();
                 recentScrollBox.add_actor(this.recentSection.actor);
+                recentPane._connectSubMenuSignals(this.recentSection, this.recentSection);
                 
-                let clearRecent = new ClearRecentMenuItem(this.menu, this.recentManager);
+                let clearRecent = new ClearRecentMenuItem(this.recentManager);
                 recentPane.addMenuItem(clearRecent);
                 
                 this.updateRecentDocumentsSection();
@@ -522,7 +523,7 @@ MyApplet.prototype = {
                             let entry = dirIter.get_entry();
                             if (!entry.get_app_info().get_nodisplay()) {
                                 var app = this.appSys.lookup_app_by_tree_entry(entry);
-                                let launcherItem = new LauncherMenuItem(this.menu, app);
+                                let launcherItem = new LauncherMenuItem(app);
                                 this.launchersSection.addMenuItem(launcherItem);
                             }
                         }
@@ -542,7 +543,7 @@ MyApplet.prototype = {
         let pictures = this.getPictures(dir);
         for ( let i = 0; i < pictures.length; i++ ) {
             let picture = pictures[i];
-            let pictureItem = new PictureMenuItem(this.menu, picture, this.pictureSize);
+            let pictureItem = new PictureMenuItem(picture, this.pictureSize);
             this.pictureSection.addMenuItem(pictureItem);
         }
         
@@ -582,7 +583,7 @@ MyApplet.prototype = {
         for ( let i = 0; i < showCount; i++ ) {
             let recentInfo = recentDocuments[i];
             let mimeType = recentInfo.get_mime_type().replace("\/","-");
-            let recentItem = new RecentMenuItem(this.menu, recentInfo.get_display_name(), mimeType, recentInfo.get_uri());
+            let recentItem = new RecentMenuItem(recentInfo.get_display_name(), mimeType, recentInfo.get_uri());
             this.recentSection.addMenuItem(recentItem);
         }
         
