@@ -339,14 +339,10 @@ MyApplet.prototype = {
             
             this.menuManager = new PopupMenu.PopupMenuManager(this);
             this.appSys = Cinnamon.AppSystem.get_default();
-            let dirMonitor = Gio.file_new_for_path(GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES))
-                                .monitor_directory(Gio.FileMonitorFlags.SEND_MOVED, null);
             this.recentManager = new Gtk.RecentManager();
             
             //listen for changes
-            this.appSys.connect("installed-changed", Lang.bind(this, this.buildLaunchersSection));
-            dirMonitor.connect("changed", Lang.bind(this, this.buildPicturesSection));
-            this.recentManager.connect("changed", Lang.bind(this, this.buildRecentDocumentsSection));
+            this.appSysId = this.appSys.connect("installed-changed", Lang.bind(this, this.buildLaunchersSection));
             
             this.buildMenu();
             
@@ -361,6 +357,8 @@ MyApplet.prototype = {
     
     on_applet_removed_from_panel: function() {
         if ( this.keyId ) Main.keybindingManager.removeHotKey(this.keyId);
+        this.destroyMenu();
+        this.appSys.disconnect(this.appSysId);
     },
     
     openAbout: function() {
@@ -377,11 +375,11 @@ MyApplet.prototype = {
         this.settings.bindProperty(Settings.BindingDirection.IN, "panelText", "panelText", this.setPanelText);
         this.settings.bindProperty(Settings.BindingDirection.IN, "iconSize", "iconSize", this.buildMenu);
         this.settings.bindProperty(Settings.BindingDirection.IN, "showPictures", "showPictures", this.buildMenu);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "altDir", "altDir", this.buildPicturesSection);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "recursePictures", "recursePictures", this.buildPicturesSection);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "pictureSize", "pictureSize", this.buildPicturesSection);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "altDir", "altDir", this.buildMenu);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "recursePictures", "recursePictures", this.updatePicturesSection);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "pictureSize", "pictureSize", this.updatePicturesSection);
         this.settings.bindProperty(Settings.BindingDirection.IN, "showRecentDocuments", "showRecentDocuments", this.buildMenu);
-        this.settings.bindProperty(Settings.BindingDirection.IN, "recentSizeLimit", "recentSizeLimit", this.buildRecentDocumentsSection);
+        this.settings.bindProperty(Settings.BindingDirection.IN, "recentSizeLimit", "recentSizeLimit", this.updateRecentDocumentsSection);
         this.settings.bindProperty(Settings.BindingDirection.IN, "keyOpen", "keyOpen", this._setKeybinding);
         this._setKeybinding();
     },
@@ -396,7 +394,7 @@ MyApplet.prototype = {
     buildMenu: function() {
         try {
             
-            if ( this.menu ) this.menu.destroy();
+            this.destroyMenu();
             
             menu_item_icon_size = this.iconSize;
             
@@ -423,40 +421,52 @@ MyApplet.prototype = {
             
             //pictures section
             if ( this.showPictures ) {
-                let picturesPaneBox = new St.BoxLayout({ style_class: "xCenter-pane" });
-                mainBox.add_actor(picturesPaneBox);
-                let picturesPane = new PopupMenu.PopupMenuSection();
-                picturesPaneBox.add_actor(picturesPane.actor);
+                //determine directory
+                if ( this.altDir == "" ) this.picturesPath = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES);
+                else this.picturesPath = this.altDir;
                 
-                let picturesTitle = new PopupMenu.PopupBaseMenuItem({ style_class: "xCenter-title", reactive: false });
-                picturesTitle.addActor(new St.Label({ text: _("PICTURES") }));
-                picturesPane.addMenuItem(picturesTitle);
-                
-                //add link to documents folder
-                let linkButton = new St.Button();
-                picturesTitle.addActor(linkButton);
-                let file = Gio.file_new_for_path(this.metadata.path + "/link-symbolic.svg");
-                let gicon = new Gio.FileIcon({ file: file });
-                let image = new St.Icon({ gicon: gicon, icon_size: 10, icon_type: St.IconType.SYMBOLIC });
-                linkButton.add_actor(image);
-                linkButton.connect("clicked", Lang.bind(this, this.openPicturesFolder));
-                new Tooltips.Tooltip(linkButton, _("Open folder"));
-                
-                let pictureScrollBox = new St.ScrollView({ style_class: "xCenter-scrollBox", x_fill: true, y_fill: false, y_align: St.Align.START });
-                picturesPane.actor.add_actor(pictureScrollBox);
-                pictureScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-                let vscroll = pictureScrollBox.get_vscroll_bar();
-                vscroll.connect("scroll-start", Lang.bind(this, function() { this.menu.passEvents = true; }));
-                vscroll.connect("scroll-stop", Lang.bind(this, function() { this.menu.passEvents = false; }));
-                
-                this.pictureSection = new PopupMenu.PopupMenuSection();
-                pictureScrollBox.add_actor(this.pictureSection.actor);
-                
-                this.buildPicturesSection();
+                //if directory exists, build pictures section
+                if ( this.picturesPath && GLib.file_test(this.picturesPath, GLib.FileTest.IS_DIR) ) {
+                    let dirMonitor = Gio.file_new_for_path(this.picturesPath).monitor_directory(Gio.FileMonitorFlags.SEND_MOVED, null);
+                    this.monitorId = dirMonitor.connect("changed", Lang.bind(this, this.updatePicturesSection));
+                    
+                    let picturesPaneBox = new St.BoxLayout({ style_class: "xCenter-pane" });
+                    mainBox.add_actor(picturesPaneBox);
+                    let picturesPane = new PopupMenu.PopupMenuSection();
+                    picturesPaneBox.add_actor(picturesPane.actor);
+                    
+                    let picturesTitle = new PopupMenu.PopupBaseMenuItem({ style_class: "xCenter-title", reactive: false });
+                    picturesTitle.addActor(new St.Label({ text: _("PICTURES") }));
+                    picturesPane.addMenuItem(picturesTitle);
+                    
+                    //add link to documents folder
+                    let linkButton = new St.Button();
+                    picturesTitle.addActor(linkButton);
+                    let file = Gio.file_new_for_path(this.metadata.path + "/link-symbolic.svg");
+                    let gicon = new Gio.FileIcon({ file: file });
+                    let image = new St.Icon({ gicon: gicon, icon_size: 10, icon_type: St.IconType.SYMBOLIC });
+                    linkButton.add_actor(image);
+                    linkButton.connect("clicked", Lang.bind(this, this.openPicturesFolder));
+                    new Tooltips.Tooltip(linkButton, _("Open folder"));
+                    
+                    let pictureScrollBox = new St.ScrollView({ style_class: "xCenter-scrollBox", x_fill: true, y_fill: false, y_align: St.Align.START });
+                    picturesPane.actor.add_actor(pictureScrollBox);
+                    pictureScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+                    let vscroll = pictureScrollBox.get_vscroll_bar();
+                    vscroll.connect("scroll-start", Lang.bind(this, function() { this.menu.passEvents = true; }));
+                    vscroll.connect("scroll-stop", Lang.bind(this, function() { this.menu.passEvents = false; }));
+                    
+                    this.pictureSection = new PopupMenu.PopupMenuSection();
+                    pictureScrollBox.add_actor(this.pictureSection.actor);
+                    
+                    this.updatePicturesSection();
+                }
             }
             
             //recent documents section
             if ( this.showRecentDocuments ) {
+                this.recentManagerId = this.recentManager.connect("changed", Lang.bind(this, this.updateRecentDocumentsSection));
+                
                 let recentPaneBox = new St.BoxLayout({ style_class: "xCenter-pane" });
                 mainBox.add_actor(recentPaneBox);
                 let recentPane = new PopupMenu.PopupMenuSection();
@@ -478,12 +488,19 @@ MyApplet.prototype = {
                 let clearRecent = new ClearRecentMenuItem(this.menu, this.recentManager);
                 recentPane.addMenuItem(clearRecent);
                 
-                this.buildRecentDocumentsSection();
+                this.updateRecentDocumentsSection();
             }
             
         } catch(e) {
             global.logError(e);
         }
+    },
+    
+    destroyMenu: function() {
+        if ( this.monitorId ) this.dirMonitor.disconnect(this.monitorId);
+        if ( this.recentManagerId ) this.recentManager.disconnect(this.recentManagerId);
+        
+        if ( this.menu ) this.menu.destroy();
     },
     
     buildLaunchersSection: function() {
@@ -516,12 +533,11 @@ MyApplet.prototype = {
         
     },
     
-    buildPicturesSection: function() {
+    updatePicturesSection: function() {
         
+        if ( !this.pictureSection ) return;
         this.pictureSection.removeAll();
         
-        if ( this.altDir == "" ) this.picturesPath = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES);
-        else this.picturesPath = this.altDir;
         let dir = Gio.file_new_for_path(this.picturesPath);
         let pictures = this.getPictures(dir);
         for ( let i = 0; i < pictures.length; i++ ) {
@@ -553,9 +569,9 @@ MyApplet.prototype = {
         
     },
     
-    buildRecentDocumentsSection: function() {
+    updateRecentDocumentsSection: function() {
         
-        if ( !this.showRecentDocuments ) return;
+        if ( !this.recentSection ) return;
         this.recentSection.removeAll();
         
         let recentDocuments = this.recentManager.get_items();
